@@ -14,7 +14,8 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
 
-    <!-- QRCode.js -->
+    <!-- CryptoJS & QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         *,
@@ -528,7 +529,7 @@
             <!-- Security badge -->
             <div class="security-badge">
                 <span class="lock-icon">🔒</span>
-                <span>AES-256-GCM 端到端加密 · 閱後即焚</span>
+                <span>AES-256-CBC 端到端加密 · 閱後即焚</span>
             </div>
         </div>
     </div>
@@ -567,50 +568,31 @@
         }
 
         /**
-         * Convert Base64 string to Uint8Array.
-         */
-        function base64ToUint8(base64) {
-            const binary = atob(base64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
-            }
-            return bytes;
-        }
-
-        /**
-         * AES-256-GCM Decryption using Web Crypto API.
-         * Input format: "base64(IV):base64(ciphertext_with_tag)"
+         * AES-256-CBC Decryption.
+         * Input format: "base64(IV):base64(ciphertext)"
          * Key format: Base64-encoded 32-byte key
          */
-        async function aesDecryptGCM(encryptedPayload, base64Key) {
+        function aesDecrypt(encryptedPayload, base64Key) {
             const parts = encryptedPayload.split(':');
             if (parts.length !== 2) {
                 throw new Error('密文格式無效：缺少 IV 分隔符');
             }
 
-            const ivBytes = base64ToUint8(parts[0]);
-            const cipherBytes = base64ToUint8(parts[1]);
-            const keyBytes = base64ToUint8(base64Key);
+            const iv = CryptoJS.enc.Base64.parse(parts[0]);
+            const ciphertext = parts[1];
+            const key = CryptoJS.enc.Base64.parse(base64Key);
 
-            const cryptoKey = await crypto.subtle.importKey(
-                'raw',
-                keyBytes,
-                { name: 'AES-GCM', length: 256 },
-                false,
-                ['decrypt']
-            );
+            const decrypted = CryptoJS.AES.decrypt(ciphertext, key, {
+                iv: iv,
+                mode: CryptoJS.mode.CBC,
+                padding: CryptoJS.pad.Pkcs7
+            });
 
-            try {
-                const decryptedBuffer = await crypto.subtle.decrypt(
-                    { name: 'AES-GCM', iv: ivBytes },
-                    cryptoKey,
-                    cipherBytes
-                );
-                return new TextDecoder().decode(decryptedBuffer);
-            } catch (e) {
-                throw new Error('解密失敗：密鑰不符或資料被竄改');
+            const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
+            if (!plaintext) {
+                throw new Error('解密失敗：密鑰不符或資料損壞');
             }
+            return plaintext;
         }
 
         // ============================================================
@@ -672,7 +654,7 @@
             debugJson.innerHTML =
                 '<span class="key-label">"id"</span>: <span class="val">"' + sessionId.substring(0, 8) + '..."</span>\n' +
                 '<span class="key-label">"key"</span>: <span class="val">"' + maskedKey + '"</span>\n' +
-                '<span class="key-label">"key_bits"</span>: <span class="val">256 (AES-GCM)</span>';
+                '<span class="key-label">"key_bits"</span>: <span class="val">256 (AES-CBC)</span>';
 
             // Update status
             setStatus('polling', '<strong>等待掃碼中</strong> — 每 2 秒安全檢查一次');
@@ -769,8 +751,8 @@
                             // Best-effort deletion; continue regardless
                         }
 
-                        // 2. AES-256-GCM Decryption (AEAD ensures integrity)
-                        const ssoUrl = await aesDecryptGCM(data.payload, secretKey);
+                        // 2. AES-256-CBC Decryption
+                        const ssoUrl = aesDecrypt(data.payload, secretKey);
 
                         // 3. Clear sensitive data from memory
                         secretKey = '';
