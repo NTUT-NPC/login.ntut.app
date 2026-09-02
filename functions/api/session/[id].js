@@ -1,6 +1,6 @@
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
 };
 
@@ -72,6 +72,18 @@ export async function onRequest(context) {
             });
         } catch (e) {
             return new Response('Failed to write to DB', { status: 502, headers: CORS_HEADERS });
+        }
+    }
+
+    if (request.method === 'DELETE') {
+        try {
+            const res = await fetch(url, { method: 'DELETE' });
+            return new Response(null, {
+                status: res.status,
+                headers: CORS_HEADERS
+            });
+        } catch (e) {
+            return new Response('Failed to delete from DB', { status: 502, headers: CORS_HEADERS });
         }
     }
 
