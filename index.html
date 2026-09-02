@@ -538,7 +538,7 @@
         // ============================================================
         // Configuration
         // ============================================================
-        const FIREBASE_DB_URL = 'https://nportal-qr-login-default-rtdb.europe-west1.firebasedatabase.app';
+        const API_BASE_URL = '/api/session';
         const SESSION_TTL_SECONDS = 300; // 5 minutes
         const POLL_INTERVAL_MS = 2000;
 
@@ -728,7 +728,7 @@
         function startPolling() {
             pollTimer = setInterval(async () => {
                 try {
-                    const url = FIREBASE_DB_URL + '/sessions/' + sessionId + '.json';
+                    const url = `${API_BASE_URL}/${sessionId}`;
                     const res = await fetch(url);
 
                     if (!res.ok) return; // silently retry on next tick
